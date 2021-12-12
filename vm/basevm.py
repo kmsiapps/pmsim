@@ -65,6 +65,8 @@ class VM:
     
 
     def migrate(self, target):
+        if self.PM == target:
+            return
         self.PM.migrate(self, target)
 
 

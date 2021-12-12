@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import random
+import csv
+import os
 
 from pm.pm import PM
 from pm.vmmigrator import VM_Migrator, Naive_VM_Migrator
@@ -11,6 +13,7 @@ random.seed(0)
 MAX_VM = 50
 FORECAST_PERIOD = 100
 SIM_DURATION = 10000
+dirname = "sim_results/migrator=naive,vm=proposed"
 
 # For plots =====================
 total_usage = []
@@ -36,13 +39,13 @@ for t in range(SIM_DURATION):
     if k < MAX_VM and t >= push_time:
         filename = f'./synthetic_logs/instance_{k}.csv'
         vm = VM_Proposed(filename, lambda_param=1)
-        # vm = VM_Naive_Max(filename)
         # vm = VM_Naive_Mean(filename)
-
+        # vm = VM_Naive_Max(filename)
+        
         # push vm into least-used pm
         target_pm = min(pm_list, key=lambda pm: pm.last_forecasted_loads[0])
         target_pm.push(vm)
-        push_time += random.randint(30, 300)
+        push_time += random.randint(30, 150)
         k += 1
 
     # vm usage forecast
@@ -67,8 +70,9 @@ for t in range(SIM_DURATION):
     num_pms.append(len(pm_list))
     num_vms.append(sum(len(pm.VM_list) for pm in pm_list))
     avg_pm_loads.append(sum(pm.cpu_usage for pm in pm_list) / len(pm_list))
-    violations.append(sum(len(pm.overload_ticks) for pm in pm_list))
-    migrations.append(sum(pm.migrations for pm in pm_list))
+
+    violations.append(sum(len(pm.overload_ticks) for pm in pm_history))
+    migrations.append(sum(pm.migrations for pm in pm_history))
 
 print('Sim done')
 
@@ -130,8 +134,57 @@ for machine in pm_history:
         f'Avg load: {sum(machine.cpu_log)/len(machine.cpu_log):.2f}, '
         f'# of migrations: {machine.migrations}')
 
-# TODO:
-# 3) Experiments:
-#    max vs mean vs naive (# of violations, # of pms, pm cpu usages)
-#    lambda_param vs. # of violations, pm cpu usages (efficiency); proposed ~ max as lambda goes lower
-#    naive vs propopsed placement: # of migrations
+# Data save ===========================
+
+if not os.path.isdir(f'./{dirname}'):
+    os.mkdir(f'./{dirname}')
+
+f = open(f"./{dirname}/overall_stat.csv", "w", newline='')
+writer = csv.writer(f)
+data = zip(timestamp, total_usage, total_forecasts, avg_pm_loads, num_pms, num_vms, violations, migrations)
+writer.writerow(['Timestamp', 'TotalUsage', 'TotalForecasts', 'AvgPMLoads', 'NumPMs', 'NumVMs', 'Violations', 'Migrations'])
+writer.writerows(data)
+f.close()
+
+f = open(f'./{dirname}/deployments.csv', 'w', newline='')
+writer = csv.writer(f)
+writer.writerow(['DeploymentTime'])
+for dp in deployments:
+    writer.writerow([dp])
+f.close()
+
+for pm in pm_history:
+    if not os.path.isdir(f'./{dirname}/pm{pm.id}'):
+        os.mkdir(f'./{dirname}/pm{pm.id}')
+
+    f = open(f"./{dirname}/pm{pm.id}/cpulogs.csv", "w", newline='')
+    writer = csv.writer(f)
+    timestamp = range(machine.init_timestamp, machine.init_timestamp + len(machine.cpu_log))
+    data = zip(timestamp, pm.cpu_log)
+    writer.writerow(['Timestamp', 'CPUUsage'])
+    writer.writerows(data)
+    f.close()
+
+    f = open(f"./{dirname}/pm{pm.id}/forecasts.csv", "w", newline='')
+    writer = csv.writer(f)
+    data = zip(pm.forecast_timestamps, pm.forecasts[0])
+    writer.writerow(['Timestamp', 'CPUForecasts'])
+    writer.writerows(data)
+    f.close()
+
+    f = open(f"./{dirname}/pm{pm.id}/migrations.csv", "w", newline='')
+    writer = csv.writer(f)
+    writer.writerow(['MigrationTime'])
+    for mt in pm.migration_timestamp:
+        writer.writerow([mt])
+    f.close()
+
+    f = open(f"./{dirname}/pm{pm.id}/stats.txt", "w")
+    f.write(
+        f'PM #{pm.id}, {pm.init_timestamp}~{pm.init_timestamp + len(pm.cpu_log)}\n'
+        f'# Overloads: {len(pm.overload_ticks)}\n'
+        f'Avg overloads: {sum(pm.overload_loads) / max(1, len(pm.overload_loads)):.2f}\n'
+        f'Avg load: {sum(pm.cpu_log)/len(pm.cpu_log):.2f}\n'
+        f'# of migrations: {pm.migrations}\n'
+    )
+    f.close()

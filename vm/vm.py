@@ -112,9 +112,11 @@ class VM_Proposed(ReplayVM):
 
                 # conservative approach: if predicted load before but not yet,
                 # retain load predictions
+                '''
                 if loadticks[-1] + load_period < self.timestamp:
                     predicted_loads.append(min(load_usage * gaussian_pdf(0, 0, load_s), 100))
                     continue
+                '''
 
                 start = self.load_ticks[-1]
 

@@ -62,6 +62,8 @@ class PM:
         for i in range(len(dest.last_forecasted_loads)):
                 self.last_forecasted_loads[i] -= vm.last_forecasted_loads[i]
                 dest.last_forecasted_loads[i] += vm.last_forecasted_loads[i]
+                self.forecasts[i][-1] -= vm.last_forecasted_loads[i]
+                dest.forecasts[i][-1] += vm.last_forecasted_loads[i]
         
         dest.push(self.pop(vm))
     

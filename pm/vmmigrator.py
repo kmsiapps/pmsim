@@ -1,7 +1,7 @@
-from typing import overload
 from pm.pm import PM
 
-MIN_LOAD_THRESHOLD = 25
+MIN_LOAD_THRESHOLD = 40
+MIN_PM_LIFE = 500
 
 def get_best_fit_vm(pm, vm_list):
     target = list(filter(lambda vm: pm.last_forecasted_loads[0] \
@@ -44,10 +44,10 @@ class VM_Migrator():
 
         # Remove underutilized pms
         avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
-        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD:
+        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD and \
+              min(len(pm.cpu_log) for pm in pm_list) >= MIN_PM_LIFE:
             print(f'{pm_list[0].timestamp}: PM #{pm_list[-1].id} Removed! on {avg_util:.2f}%')
-
-            pm_list[-1].migrations += len(pm_list[-1].VM_list)
+            placement_target += pm_list[-1].VM_list
             pm_list = pm_list[:-1]
             avg_util = sum((pm.last_forecasted_loads[-1] for pm in pm_list)) / len(pm_list)
         
@@ -112,10 +112,10 @@ class Naive_VM_Migrator():
 
         # Remove underutilized pms
         avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
-        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD:
+        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD and \
+              min(len(pm.cpu_log) for pm in pm_list) >= MIN_PM_LIFE:
             print(f'{pm_list[0].timestamp}: PM #{pm_list[-1].id} Removed! on {avg_util:.2f}%')
-
-            pm_list[-1].migrations += len(pm_list[-1].VM_list)
+            placement_target += pm_list[-1].VM_list
             pm_list = pm_list[:-1]
             avg_util = sum((pm.last_forecasted_loads[-1] for pm in pm_list)) / len(pm_list)
 
@@ -145,6 +145,9 @@ class Naive_VM_Migrator():
                 new_pm = PM(init_timestamp=pm_list[0].timestamp)
                 pm_list.append(new_pm)
                 pm_fc_loads[new_pm.id] = 0
+
+                avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
+                print(f'{pm_list[0].timestamp}: PM #{new_pm.id} Added! on {avg_util:.2f}%')
             
 
         return pm_list
