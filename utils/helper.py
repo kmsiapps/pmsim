@@ -1,5 +1,6 @@
 import random
 from math import exp, log
+import math
 
 def confine(num, start=0, end=100):
     if num < start:
@@ -32,4 +33,4 @@ def gaussian_pdf(x, mu, sigma):
     value of gaussian pdf, given x and mu and sigma.
     peak heights are normalized with 1
     '''
-    return exp(-1 * (x - mu)**2 / 2 / sigma**2) #1 / (sigma * math.sqrt(2 * math.pi)) * 
+    return exp(-1 * (x - mu)**2 / 2 / sigma**2) / (sigma * math.sqrt(2 * math.pi))

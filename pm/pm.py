@@ -5,7 +5,7 @@ class PM:
 
     def __init__(self, cpu_capa = 100, mem_capa = 100,
                  io_capa = 100, netw_capa = 100,
-                 max_overload = 0.00, init_timestamp = 0):
+                 max_overload = 0.10, init_timestamp = 0):
         self.VM_list = []
 
         self.cpu_usage = 0

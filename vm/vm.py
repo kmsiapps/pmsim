@@ -84,14 +84,21 @@ class VM_Proposed(ReplayVM):
             time_after = time_after + duration
 
             # 1) p95 load usage
-            load_usages = self.get_load_usage(percentile=95)
+            # load_usages = self.get_load_usage(percentile=95)
 
-            # 2) Calculate average period and its sigma
+            # 1) Calculate average period and its sigma
             loadticks = self.load_ticks[:]
             load_period, load_s = self.get_period(loadticks)
 
             load_period = int(load_period)
             load_s /= self.lambda_param
+
+            # 2) sum over load period
+            load_usages = [sum(self.cpu_log[:load_period]),
+                           sum(self.mem_log[:load_period]),
+                           sum(self.io_log[:load_period]),
+                           sum(self.netw_log[:load_period]),
+                          ]
 
             # 3) Calculate 95th load duration
             d = self.load_durations[:]
@@ -106,7 +113,7 @@ class VM_Proposed(ReplayVM):
                 # conservative approach: if predicted load before but not yet,
                 # retain load predictions
                 if loadticks[-1] + load_period < self.timestamp:
-                    predicted_loads.append(load_usage)
+                    predicted_loads.append(min(load_usage * gaussian_pdf(0, 0, load_s), 100))
                     continue
 
                 start = self.load_ticks[-1]
@@ -118,22 +125,30 @@ class VM_Proposed(ReplayVM):
                         # predict load with gaussian pdfs
                         t = i + self.timestamp + 1
                         if t < t_target: 
-                            predicted_load[i] = max(
-                                load_usage * gaussian_pdf(t, t_target, load_s),
-                                predicted_load[i])
+                            predicted_load[i] = min(
+                                predicted_load[i] + load_usage * gaussian_pdf(t, t_target, load_s),
+                                100)
                         elif t_target + load_duration > t >= t_target:
-                            predicted_load[i] = load_usage
+                            predicted_load[i] = min(load_usage * gaussian_pdf(0, 0, load_s), 100)
                         else:
-                            predicted_load[i] = max(
-                                load_usage * gaussian_pdf(t, t_target + load_duration, load_s),
-                                predicted_load[i])
-                
+                            predicted_load[i] = min(
+                                predicted_load[i] + load_usage * gaussian_pdf(t, t_target + load_duration, load_s),
+                                100)
+
                 predicted_load = predicted_load[-1 * duration:]
                 predicted_load.sort()
-                predicted_loads.append(predicted_load[round((len(predicted_load) - 1) / 100 * 95)])
+                predicted_95th = predicted_load[round((len(predicted_load) - 1) / 100 * 95)]
+
+                predicted_loads.append(min(predicted_95th, 100))
+                
+                # print(f'{load_usage * gaussian_pdf(0, 0, load_s):.2f}, {sum(self.cpu_log) / max(len(self.cpu_log), 1):.2f}')
         except:
-            # if no sufficient data, return magic value
-            predicted_loads = [20] * 4
+            # if no sufficient data, return mean
+            predicted_loads = [sum(self.cpu_log) / max(len(self.cpu_log), 1),
+                               sum(self.mem_log) / max(len(self.mem_log), 1),
+                               sum(self.io_log) / max(len(self.io_log), 1),
+                               sum(self.netw_log) / max(len(self.netw_log), 1),
+                              ]
 
         self.last_forecasted_loads = predicted_loads
         return predicted_loads

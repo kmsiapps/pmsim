@@ -1,10 +1,11 @@
 from typing import overload
 from pm.pm import PM
 
+MIN_LOAD_THRESHOLD = 25
 
 def get_best_fit_vm(pm, vm_list):
     target = list(filter(lambda vm: pm.last_forecasted_loads[0] \
-                        - vm.last_forecasted_loads[0] - 100 < 0,
+                        - vm.last_forecasted_loads[0] - 100 * (1 + pm.max_pred_overload) < 0,
                         vm_list))
     
     # if there's no best-fit vm, then migrate heaviest vm
@@ -13,12 +14,12 @@ def get_best_fit_vm(pm, vm_list):
     
     return min(target,
                key=lambda vm: abs(pm.last_forecasted_loads[0])\
-                   - vm.last_forecasted_loads[0] - 100)
+                   - vm.last_forecasted_loads[0] - 100 * (1 + pm.max_pred_overload))
 
 
 def get_best_fit_pm(vm, pm_list):
     target = list(filter(lambda pm: pm.last_forecasted_loads[0] \
-                        + vm.last_forecasted_loads[0] <= 100,
+                        + vm.last_forecasted_loads[0] <= 100 * (1 + pm.max_pred_overload),
                         pm_list))
     
     # if there's no best-fit vm, then return None
@@ -27,17 +28,29 @@ def get_best_fit_pm(vm, pm_list):
 
     return min(target,
                key=lambda pm: abs(pm.last_forecasted_loads[0])\
-                   + vm.last_forecasted_loads[0] - 100)
+                   + vm.last_forecasted_loads[0] - 100 * (1 + pm.max_pred_overload))
 
 
 class VM_Migrator():
-    def migrate(self, pm_list):
+    def migrate(self, pm_list_origin):
         '''
         Migrates each VMs to PMs, based on their last forecasted load usage
         '''
-        pm_list = pm_list[:]
+
+        pm_list = pm_list_origin[:]
+        pm_list.sort(key=lambda pm: pm.last_forecasted_loads[0], reverse=True)
+
         placement_target = []
 
+        # Remove underutilized pms
+        avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
+        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD:
+            print(f'{pm_list[0].timestamp}: PM #{pm_list[-1].id} Removed! on {avg_util:.2f}%')
+
+            pm_list[-1].migrations += len(pm_list[-1].VM_list)
+            pm_list = pm_list[:-1]
+            avg_util = sum((pm.last_forecasted_loads[-1] for pm in pm_list)) / len(pm_list)
+        
         # get target VMs
         # loads[0] for cpu (loads: [cpu, mem, io, netw])
         overloaded_pm_list = list(filter(lambda pm: \
@@ -77,10 +90,10 @@ class VM_Migrator():
             if placement_target:
                 new_pm = PM(init_timestamp=pm_list[0].timestamp)
                 pm_list.append(new_pm)
+
+                avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
+                print(f'{pm_list[0].timestamp}: PM #{new_pm.id} Added! on {avg_util:.2f}%')
         
-        # if predicted utilization is too low, remove PMs
-        # TODO
-        # For this sim VMs never shut down, so left this for future work
         return pm_list
 
 
@@ -93,6 +106,18 @@ class Naive_VM_Migrator():
         pm_list = pm_list[:]
         placement_target = []
         pm_fc_loads = {}
+
+
+        pm_list.sort(key=lambda pm: pm.last_forecasted_loads[0], reverse=True)
+
+        # Remove underutilized pms
+        avg_util = sum((pm.last_forecasted_loads[0] for pm in pm_list)) / len(pm_list)
+        while len(pm_list) > 1 and avg_util < MIN_LOAD_THRESHOLD:
+            print(f'{pm_list[0].timestamp}: PM #{pm_list[-1].id} Removed! on {avg_util:.2f}%')
+
+            pm_list[-1].migrations += len(pm_list[-1].VM_list)
+            pm_list = pm_list[:-1]
+            avg_util = sum((pm.last_forecasted_loads[-1] for pm in pm_list)) / len(pm_list)
 
         # Clear each PMs and pull out every VMs for migration
         for pm in pm_list:

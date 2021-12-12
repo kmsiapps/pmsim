@@ -5,7 +5,7 @@ from vm.vm import VM_Proposed, VM_Naive_Max, VM_Naive_Mean
 
 for k in range(5):
     filename = f'./synthetic_logs/instance_{k}.csv'
-    lambda_param = 2
+    lambda_param = 1
 
     idx = []
     loads = []
