@@ -13,7 +13,7 @@ random.seed(0)
 MAX_VM = 50
 FORECAST_PERIOD = 100
 SIM_DURATION = 10000
-dirname = "sim_results/migrator=naive,vm=proposed"
+dirname = "sim_results/migrator=proposed,vm=max"
 
 # For plots =====================
 total_usage = []
@@ -22,6 +22,7 @@ num_pms = []
 num_vms = []
 avg_pm_loads = []
 violations = []
+violation_loads = []
 migrations = []
 
 # Simulations ===================
@@ -38,9 +39,9 @@ for t in range(SIM_DURATION):
     # push vm
     if k < MAX_VM and t >= push_time:
         filename = f'./synthetic_logs/instance_{k}.csv'
-        vm = VM_Proposed(filename, lambda_param=1)
+        # vm = VM_Proposed(filename, lambda_param=1)
         # vm = VM_Naive_Mean(filename)
-        # vm = VM_Naive_Max(filename)
+        vm = VM_Naive_Max(filename)
         
         # push vm into least-used pm
         target_pm = min(pm_list, key=lambda pm: pm.last_forecasted_loads[0])
@@ -72,20 +73,22 @@ for t in range(SIM_DURATION):
     avg_pm_loads.append(sum(pm.cpu_usage for pm in pm_list) / len(pm_list))
 
     violations.append(sum(len(pm.overload_ticks) for pm in pm_history))
+    violation_loads.append(sum(sum(pm.overload_loads) for pm in pm_history))
     migrations.append(sum(pm.migrations for pm in pm_history))
 
 print('Sim done')
 
 # Results ===========================
 
-deployments = [machine.init_timestamp for machine in pm_list]
+deployments = [machine.init_timestamp for machine in pm_history]
+destroyed = [machine.init_timestamp + len(machine.cpu_log) for machine in pm_history]
 timestamp = range(SIM_DURATION)
 
 plt.title('Total usage vs forecasts')
 plt.plot(timestamp, total_usage)
 plt.plot(timestamp, total_forecasts)
 
-plt.show()
+# plt.show()
 
 # =============
 
@@ -99,7 +102,7 @@ ax1.plot(timestamp, [100] * len(timestamp), 'r--')
 ax2.plot(timestamp, num_pms, 'g')
 ax2.plot(timestamp, num_vms, 'b')
 
-plt.show()
+# plt.show()
 
 # =============
 
@@ -110,7 +113,7 @@ plt.title('Violations and migrations')
 ax1.plot(timestamp, violations, 'r')
 ax2.plot(timestamp, migrations, 'b')
 
-plt.show()
+# plt.show()
 
 # Per-machine results ===============
 
@@ -126,7 +129,7 @@ for machine in pm_history:
     plt.plot(range(machine.init_timestamp, machine.init_timestamp + len(machine.cpu_log)), machine.cpu_log)
     plt.plot(machine.forecast_timestamps, machine.forecasts[0])
 
-    plt.show()
+    # plt.show()
 
     print(f'PM #{machine.id}, {machine.init_timestamp}~{machine.init_timestamp + len(machine.cpu_log)}, '
         f'# Overloads: {len(machine.overload_ticks)}, '
@@ -141,8 +144,8 @@ if not os.path.isdir(f'./{dirname}'):
 
 f = open(f"./{dirname}/overall_stat.csv", "w", newline='')
 writer = csv.writer(f)
-data = zip(timestamp, total_usage, total_forecasts, avg_pm_loads, num_pms, num_vms, violations, migrations)
-writer.writerow(['Timestamp', 'TotalUsage', 'TotalForecasts', 'AvgPMLoads', 'NumPMs', 'NumVMs', 'Violations', 'Migrations'])
+data = zip(timestamp, total_usage, total_forecasts, avg_pm_loads, num_pms, num_vms, violations, violation_loads, migrations)
+writer.writerow(['Timestamp', 'TotalUsage', 'TotalForecasts', 'AvgPMLoads', 'NumPMs', 'NumVMs', 'Violations', 'ViolationSum', 'Migrations'])
 writer.writerows(data)
 f.close()
 
@@ -152,6 +155,14 @@ writer.writerow(['DeploymentTime'])
 for dp in deployments:
     writer.writerow([dp])
 f.close()
+
+f = open(f'./{dirname}/destroyed.csv', 'w', newline='')
+writer = csv.writer(f)
+writer.writerow(['DestroyedTime'])
+for ds in destroyed:
+    writer.writerow([ds])
+f.close()
+
 
 for pm in pm_history:
     if not os.path.isdir(f'./{dirname}/pm{pm.id}'):

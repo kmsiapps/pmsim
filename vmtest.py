@@ -3,7 +3,7 @@ import csv
 
 from vm.vm import VM_Proposed, VM_Naive_Max, VM_Naive_Mean
 
-for k in range(5):
+for k in range(2, 3):
     filename = f'./synthetic_logs/instance_{k}.csv'
     lambda_param = 1
 
@@ -56,3 +56,15 @@ for k in range(5):
 
     plt.plot(timestamp_responsible, prediction_responsible, 'rx')
     plt.show()
+
+f = open('./sim_results/proposed_forecasts_timeseries.csv', 'w', newline='')
+writer = csv.writer(f)
+writer.writerow(['Timestamp', 'Forecasts'])
+writer.writerows(zip(timestamp, prediction))
+f.close()
+
+f = open('./sim_results/proposed_load_timeseries.csv', 'w', newline='')
+writer = csv.writer(f)
+writer.writerow(['Timestamp', 'Loads'])
+writer.writerows(zip(idx, loads))
+f.close()
